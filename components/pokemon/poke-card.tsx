@@ -1,18 +1,18 @@
-import { useFavouriteStatus, useToggleFavourite } from "@/hooks/use-favourites";
-import { Link } from "expo-router";
-import * as Sharing from "expo-sharing";
-import { MoreVertical, Star } from "lucide-react-native";
 import React from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  Alert,
+  Platform,
+  Share,
 } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { MoreVertical, Star } from "lucide-react-native";
+import { useFavouriteStatus, useToggleFavourite } from "@/hooks/use-favourites";
 
 const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 48) / 2;
@@ -25,13 +25,14 @@ interface PokeCardProps {
       front_default: string | null;
     };
   };
-  showFavouriteStar?: boolean; // Optional: show star on card
+  showFavouriteStar?: boolean;
 }
 
 export default function PokeCard({
   pokemon,
   showFavouriteStar = false,
 }: PokeCardProps) {
+  const router = useRouter();
   const { data: isFavourite } = useFavouriteStatus(pokemon.id);
   const toggleFavourite = useToggleFavourite();
 
@@ -41,8 +42,12 @@ export default function PokeCard({
 
   const handleShare = async () => {
     try {
-      await Sharing.shareAsync(`Check out ${pokemon.name}! #${pokemon.id}`, {
-        dialogTitle: `Share ${pokemon.name}`,
+      const shareUrl = `https://pokeapi.co/api/v2/pokemon/${pokemon.id}`;
+      const message = `Check out ${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}! #${pokemon.id}\n${shareUrl}`;
+
+      await Share.share({
+        message,
+        title: `Share ${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}`,
       });
     } catch (error) {
       console.error("Error sharing:", error);
@@ -58,6 +63,10 @@ export default function PokeCard({
     });
   };
 
+  const handleOpenDetails = () => {
+    router.push(`/pokemon/${pokemon.id}`);
+  };
+
   const showOptions = () => {
     if (Platform.OS === "ios") {
       Alert.alert(
@@ -66,7 +75,7 @@ export default function PokeCard({
         [
           {
             text: "Open Details",
-            onPress: () => {},
+            onPress: handleOpenDetails,
             style: "default",
           },
           {
@@ -92,7 +101,7 @@ export default function PokeCard({
         [
           {
             text: "Open Details",
-            onPress: () => {},
+            onPress: handleOpenDetails,
             style: "default",
           },
           {
