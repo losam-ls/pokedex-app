@@ -8,11 +8,14 @@ import {
   Dimensions,
   Alert,
   Platform,
-  Share,
 } from "react-native";
-import { Link, useRouter } from "expo-router";
-import { MoreVertical, Star } from "lucide-react-native";
-import { useFavouriteStatus, useToggleFavourite } from "@/hooks/use-favourites";
+import { Link } from "expo-router";
+import { MoreVertical, Star, Share2 } from "lucide-react-native";
+import {
+  useFavouriteStatus,
+  useToggleFavourite,
+} from "@/hooks/use-favourites";
+import * as Sharing from "expo-sharing";
 
 const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 48) / 2;
@@ -32,7 +35,6 @@ export default function PokeCard({
   pokemon,
   showFavouriteStar = false,
 }: PokeCardProps) {
-  const router = useRouter();
   const { data: isFavourite } = useFavouriteStatus(pokemon.id);
   const toggleFavourite = useToggleFavourite();
 
@@ -42,12 +44,8 @@ export default function PokeCard({
 
   const handleShare = async () => {
     try {
-      const shareUrl = `https://pokeapi.co/api/v2/pokemon/${pokemon.id}`;
-      const message = `Check out ${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}! #${pokemon.id}\n${shareUrl}`;
-
-      await Share.share({
-        message,
-        title: `Share ${pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}`,
+      await Sharing.shareAsync(`Check out ${pokemon.name}! #${pokemon.id}`, {
+        dialogTitle: `Share ${pokemon.name}`,
       });
     } catch (error) {
       console.error("Error sharing:", error);
@@ -63,10 +61,6 @@ export default function PokeCard({
     });
   };
 
-  const handleOpenDetails = () => {
-    router.push(`/pokemon/${pokemon.id}`);
-  };
-
   const showOptions = () => {
     if (Platform.OS === "ios") {
       Alert.alert(
@@ -75,7 +69,7 @@ export default function PokeCard({
         [
           {
             text: "Open Details",
-            onPress: handleOpenDetails,
+            onPress: () => {},
             style: "default",
           },
           {
@@ -101,7 +95,7 @@ export default function PokeCard({
         [
           {
             text: "Open Details",
-            onPress: handleOpenDetails,
+            onPress: () => {},
             style: "default",
           },
           {
@@ -160,7 +154,7 @@ export default function PokeCard({
         </Text>
 
         <TouchableOpacity onPress={showOptions} style={styles.optionsButton}>
-          <MoreVertical size={18} color="#666" />
+          <MoreVertical size={18} color="darkgray" />
         </TouchableOpacity>
       </View>
     </View>
@@ -175,7 +169,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     margin: 8,
-    shadowColor: "#000",
+    shadowColor: "black",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -196,7 +190,7 @@ const styles = StyleSheet.create({
   idText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#666",
+    color: "darkgray",
   },
   starButton: {
     padding: 4,
@@ -221,7 +215,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
     textTransform: "capitalize",
     flex: 1,
   },

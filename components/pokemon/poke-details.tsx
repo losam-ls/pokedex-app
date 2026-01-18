@@ -2,7 +2,7 @@ import { Pokemon, PokemonSpecies, PokemonStat } from "@/constants/pokemon";
 import { capitalize } from "@/utils/string-helpers";
 import { getTypeColor } from "@/utils/type-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -12,7 +12,10 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
+import { PokeApiService } from "@/services/poke-api";
 
 const { width } = Dimensions.get("window");
 
@@ -27,6 +30,14 @@ interface PokeDetailsProps {
 
 type TabType = "about" | "stats" | "evolutions";
 
+interface EvolutionStage {
+  id: number;
+  name: string;
+  level?: number;
+  trigger?: string;
+  sprite: string;
+}
+
 const PokeDetails: React.FC<PokeDetailsProps> = ({
   pokemon,
   species,
@@ -35,17 +46,141 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
   onGoBack,
   onToggleFavourite,
 }) => {
+
   const [activeTab, setActiveTab] = useState<TabType>("about");
+  const [evolutionStages, setEvolutionStages] = useState<EvolutionStage[]>([]);
+  const [isLoadingEvolutions, setIsLoadingEvolutions] = useState(false);
+  const [evolutionError, setEvolutionError] = useState<string | null>(null);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const primaryType = pokemon.types[0]?.type.name || "normal";
   const primaryColor = getTypeColor(primaryType);
   const imageUrl =
     pokemon.sprites?.front_default ||
     `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`;
 
+  useEffect(() => {
+    const fetchEvolutionChain = async () => {
+      if (!species?.evolution_chain?.url) {
+        setEvolutionError("No evolution data available");
+        return;
+      }
+
+      setIsLoadingEvolutions(true);
+      setEvolutionError(null);
+
+      try {
+        const urlParts = species.evolution_chain.url.split("/");
+        const chainId = parseInt(urlParts[urlParts.length - 2]);
+
+        const evolutionChain =
+          await PokeApiService.getEvolutionChainById(chainId);
+        const stages: EvolutionStage[] = [];
+
+        const extractEvolutions = (chainLink: any, level: number = 0) => {
+          const speciesUrlParts = chainLink.species.url.split("/");
+          const pokemonId = parseInt(
+            speciesUrlParts[speciesUrlParts.length - 2],
+          );
+
+          stages.push({
+            id: pokemonId,
+            name: chainLink.species.name,
+            level: chainLink.evolution_details?.[0]?.min_level || level,
+            trigger: chainLink.evolution_details?.[0]?.trigger?.name,
+            sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`,
+          });
+
+          if (chainLink.evolves_to && chainLink.evolves_to.length > 0) {
+            chainLink.evolves_to.forEach((nextEvolution: any) => {
+              const nextLevel =
+                nextEvolution.evolution_details?.[0]?.min_level || level + 1;
+              extractEvolutions(nextEvolution, nextLevel);
+            });
+          }
+        };
+
+        if (evolutionChain.chain) {
+          extractEvolutions(evolutionChain.chain);
+        }
+
+        setEvolutionStages(stages);
+      } catch (error) {
+        console.error("Error fetching evolution chain:", error);
+        setEvolutionError("Failed to load evolution chain");
+      } finally {
+        setIsLoadingEvolutions(false);
+      }
+    };
+
+    fetchEvolutionChain();
+  }, [species?.evolution_chain?.url]);
+
+  const handleSwipe = ({ nativeEvent }: any) => {
+    const { translationX, state } = nativeEvent;
+
+    if (state === State.END) {
+      const tabs: TabType[] = ["about", "stats", "evolutions"];
+      const currentIndex = tabs.indexOf(activeTab);
+
+      if (translationX < -50 && currentIndex < tabs.length - 1) {
+        const nextTab = tabs[currentIndex + 1];
+        setActiveTab(nextTab);
+        scrollToTab(currentIndex + 1);
+      }
+      else if (translationX > 50 && currentIndex > 0) {
+        const prevTab = tabs[currentIndex - 1];
+        setActiveTab(prevTab);
+        scrollToTab(currentIndex - 1);
+      }
+
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    } else if (state === State.ACTIVE) {
+      translateX.setValue(translationX);
+    }
+  };
+
+  const scrollToTab = (index: number) => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        x: width * index,
+        animated: true,
+      });
+    }
+  };
+
+  const handleTabPress = (tab: TabType) => {
+    const tabs: TabType[] = ["about", "stats", "evolutions"];
+    const index = tabs.indexOf(tab);
+    setActiveTab(tab);
+    scrollToTab(index);
+  };
+
+  const getTriggerDescription = (trigger?: string, level?: number) => {
+    if (!trigger) return "";
+
+    switch (trigger) {
+      case "level-up":
+        return level ? `Level ${level}` : "Level up";
+      case "trade":
+        return "Trade";
+      case "use-item":
+        return "Use item";
+      default:
+        return capitalize(trigger.replace("-", " "));
+    }
+  };
+
   const renderNavBar = () => (
     <View style={styles.navBar}>
       <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
-        <Ionicons name="chevron-back" size={24} color="#333" />
+        <Ionicons name="chevron-back" size={24} color="black" />
         <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
 
@@ -55,12 +190,12 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
         style={styles.favouriteButton}
       >
         {isFavouriteLoading ? (
-          <ActivityIndicator size="small" color="#FF6B6B" />
+          <ActivityIndicator size="small" color="tomato" />
         ) : (
           <Ionicons
             name={isFavourite ? "heart" : "heart-outline"}
             size={24}
-            color={isFavourite ? "#FF6B6B" : "#333"}
+            color={isFavourite ? "tomato" : "black"}
           />
         )}
       </TouchableOpacity>
@@ -75,8 +210,6 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
           #{pokemon.id.toString().padStart(3, "0")}
         </Text>
       </View>
-
-      {/* Pokémon Image */}
       <View style={styles.imageContainer}>
         <Image
           source={{ uri: imageUrl }}
@@ -99,7 +232,7 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
               { borderBottomColor: primaryColor },
             ],
           ]}
-          onPress={() => setActiveTab(tab)}
+          onPress={() => handleTabPress(tab)}
         >
           <Text
             style={[
@@ -187,12 +320,12 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
 
   const renderStatsTab = () => {
     const statColors: Record<string, string> = {
-      hp: "#FF5959",
-      attack: "#F5AC78",
-      defense: "#FAE078",
-      "special-attack": "#9DB7F5",
-      "special-defense": "#A7DB8D",
-      speed: "#FA92B2",
+      hp: "crimson",
+      attack: "orange",
+      defense: "gold",
+      "special-attack": "royalblue",
+      "special-defense": "limegreen",
+      speed: "pink",
     };
 
     return (
@@ -200,7 +333,7 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
         {pokemon.stats.map((stat: PokemonStat, index: number) => {
           const statName = stat.stat.name;
           const statValue = stat.base_stat;
-          const maxStat = 255; // Max stat value in Pokémon
+          const maxStat = 255;
           const percentage = (statValue / maxStat) * 100;
 
           return (
@@ -239,45 +372,90 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
   };
 
   const renderEvolutionsTab = () => {
-    const evolutions = [
-      { id: 1, name: "bulbasaur" },
-      { id: 2, name: "ivysaur" },
-      { id: 3, name: "venusaur" },
-    ];
+    if (isLoadingEvolutions) {
+      return (
+        <View style={[styles.tabContent, styles.centerContainer]}>
+          <ActivityIndicator size="large" color={primaryColor} />
+          <Text style={styles.loadingText}>Loading evolution chain...</Text>
+        </View>
+      );
+    }
+
+    if (evolutionError) {
+      return (
+        <View style={[styles.tabContent, styles.centerContainer]}>
+          <Ionicons name="warning-outline" size={48} color="tomato" />
+          <Text style={styles.errorText}>{evolutionError}</Text>
+        </View>
+      );
+    }
+
+    if (evolutionStages.length === 0) {
+      return (
+        <View style={[styles.tabContent, styles.centerContainer]}>
+          <Ionicons name="git-network-outline" size={48} color="silver" />
+          <Text style={styles.noEvolutionsText}>No evolutions</Text>
+          <Text style={styles.noEvolutionsSubtext}>
+            This Pokémon doesn't evolve
+          </Text>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.tabContent}>
-        <Text style={styles.evolutionTitle}>Evolution Chain</Text>
+        <ScrollView>
+          <Text style={styles.evolutionTitle}>Evolution Chain</Text>
 
-        <View style={styles.evolutionContainer}>
-          {evolutions.map((evolution, index) => (
-            <View key={evolution.id} style={styles.evolutionItem}>
-              <View style={styles.evolutionCard}>
-                <Image
-                  source={{
-                    uri: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evolution.id}.png`,
-                  }}
-                  style={styles.evolutionImage}
-                  resizeMode="contain"
-                />
-                <View style={styles.evolutionInfoContainer}>
-                  <Text style={styles.evolutionName}>
-                    {capitalize(evolution.name)}
-                  </Text>
-                  <Text style={styles.evolutionId}>
-                    #{evolution.id.toString().padStart(3, "0")}
-                  </Text>
+          <View style={styles.evolutionContainer}>
+            {evolutionStages.map((stage, index) => (
+              <View key={stage.id} style={styles.evolutionItem}>
+                <View
+                  style={[
+                    styles.evolutionCard,
+                    stage.id === pokemon.id && styles.currentEvolutionCard,
+                  ]}
+                >
+                  <Image
+                    source={{ uri: stage.sprite }}
+                    style={styles.evolutionImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.evolutionInfoContainer}>
+                    <View style={styles.evolutionHeader}>
+                      <Text style={styles.evolutionName}>
+                        {capitalize(stage.name)}
+                      </Text>
+                      {stage.id === pokemon.id && (
+                        <View style={styles.currentBadge}>
+                          <Text style={styles.currentBadgeText}>Current</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.evolutionId}>
+                      #{stage.id.toString().padStart(3, "0")}
+                    </Text>
+                    {stage.trigger && (
+                      <Text style={styles.evolutionTrigger}>
+                        {getTriggerDescription(stage.trigger, stage.level)}
+                      </Text>
+                    )}
+                  </View>
                 </View>
+
+                {index < evolutionStages.length - 1 && (
+                  <View style={styles.arrowContainer}>
+                    <Ionicons
+                      name="ellipsis-vertical-sharp"
+                      size={24}
+                      color="gray"
+                    />
+                  </View>
+                )}
               </View>
-
-              {index < evolutions.length - 1 && (
-                <View style={styles.arrowContainer}>
-                  <Ionicons name="arrow-down" size={24} color="#999" />
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     );
   };
@@ -287,11 +465,37 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
       {renderNavBar()}
       {renderHeader()}
       {renderTabs()}
-      <ScrollView style={styles.contentContainer}>
-        {activeTab === "about" && renderAboutTab()}
-        {activeTab === "stats" && renderStatsTab()}
-        {activeTab === "evolutions" && renderEvolutionsTab()}
-      </ScrollView>
+
+      <PanGestureHandler
+        onHandlerStateChange={handleSwipe}
+        onGestureEvent={handleSwipe}
+      >
+        <Animated.View
+          style={[styles.swipeContainer, { transform: [{ translateX }] }]}
+        >
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.contentContainer}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={false}
+            onMomentumScrollEnd={(event) => {
+              const pageIndex = Math.round(
+                event.nativeEvent.contentOffset.x / width,
+              );
+              const tabs: TabType[] = ["about", "stats", "evolutions"];
+              if (pageIndex >= 0 && pageIndex < tabs.length) {
+                setActiveTab(tabs[pageIndex]);
+              }
+            }}
+          >
+            <View style={{ width }}>{renderAboutTab()}</View>
+            <View style={{ width }}>{renderStatsTab()}</View>
+            <View style={{ width }}>{renderEvolutionsTab()}</View>
+          </ScrollView>
+        </Animated.View>
+      </PanGestureHandler>
     </View>
   );
 };
@@ -299,7 +503,7 @@ const PokeDetails: React.FC<PokeDetailsProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "white",
   },
   navBar: {
     flexDirection: "row",
@@ -308,7 +512,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "lightgray",
   },
   backButton: {
     flexDirection: "row",
@@ -318,7 +522,7 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 16,
     marginLeft: 4,
-    color: "#333",
+    color: "black",
     fontWeight: "500",
   },
   favouriteButton: {
@@ -331,7 +535,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     paddingVertical: 20,
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "whitesmoke",
   },
   titleContainer: {
     flexDirection: "row",
@@ -344,21 +548,21 @@ const styles = StyleSheet.create({
   pokemonName: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   pokemonId: {
     fontSize: 24,
     fontWeight: "600",
-    color: "#666",
+    color: "dimgray",
   },
   imageContainer: {
     width: 200,
     height: 200,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "white",
     borderRadius: 100,
-    shadowColor: "#000",
+    shadowColor: "black",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -371,7 +575,7 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "lightgray",
   },
   tab: {
     flex: 1,
@@ -386,11 +590,14 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#999",
+    color: "gray",
   },
   activeTabText: {
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
+  },
+  swipeContainer: {
+    flex: 1,
   },
   contentContainer: {
     flex: 1,
@@ -398,6 +605,12 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: 20,
     paddingBottom: 40,
+    flex: 1,
+  },
+  centerContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
   },
   detailRow: {
     flexDirection: "row",
@@ -408,12 +621,12 @@ const styles = StyleSheet.create({
     width: 120,
     fontSize: 16,
     fontWeight: "600",
-    color: "#666",
+    color: "dimgray",
   },
   detailValue: {
     flex: 1,
     fontSize: 16,
-    color: "#333",
+    color: "black",
   },
   typeContainer: {
     flexDirection: "row",
@@ -428,7 +641,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   typeText: {
-    color: "#fff",
+    color: "white",
     fontWeight: "600",
     fontSize: 14,
   },
@@ -437,7 +650,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   abilityBadge: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "whitesmoke",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -445,11 +658,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   abilityText: {
-    color: "#666",
+    color: "dimgray",
     fontSize: 14,
   },
   hiddenAbilityText: {
-    color: "#FF6B6B",
+    color: "tomato",
     fontWeight: "500",
   },
   statRow: {
@@ -463,12 +676,12 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#666",
+    color: "dimgray",
   },
   statValue: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   statBarContainer: {
     height: 12,
@@ -482,7 +695,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "whitesmoke",
     borderRadius: 6,
   },
   statBar: {
@@ -498,23 +711,23 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopColor: "lightgray",
   },
   totalStatLabel: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   totalStatValue: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#333",
+    color: "black",
   },
   evolutionTitle: {
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 16,
-    color: "#333",
+    color: "black",
     textAlign: "center",
   },
   evolutionContainer: {
@@ -526,15 +739,20 @@ const styles = StyleSheet.create({
   evolutionCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "whitesmoke",
     borderRadius: 12,
     padding: 16,
     width: "100%",
-    shadowColor: "#000",
+    shadowColor: "black",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  currentEvolutionCard: {
+    borderColor: "dodgerblue",
+    backgroundColor: "aliceblue",
+    borderWidth: 2,
   },
   evolutionImage: {
     width: 60,
@@ -544,15 +762,31 @@ const styles = StyleSheet.create({
   evolutionInfoContainer: {
     flex: 1,
   },
+  evolutionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
   evolutionName: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
+    color: "black",
   },
   evolutionId: {
     fontSize: 14,
-    color: "#666",
+    color: "dimgray",
+  },
+  evolutionTrigger: {
+    fontSize: 12,
+    color: "dodgerblue",
+    fontWeight: "500",
+    backgroundColor: "aliceblue",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    marginTop: 4,
   },
   arrowContainer: {
     alignItems: "center",
@@ -560,16 +794,42 @@ const styles = StyleSheet.create({
   },
   evolutionLevel: {
     fontSize: 12,
-    color: "#999",
+    color: "gray",
     marginTop: 4,
   },
-  evolutionNote: {
-    fontSize: 12,
-    color: "#999",
+  currentBadge: {
+    backgroundColor: "dodgerblue",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currentBadgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "dimgray",
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "tomato",
     textAlign: "center",
-    marginTop: 20,
-    fontStyle: "italic",
-    paddingHorizontal: 20,
+  },
+  noEvolutionsText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "dimgray",
+  },
+  noEvolutionsSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "gray",
+    textAlign: "center",
   },
 });
 
