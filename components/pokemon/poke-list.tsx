@@ -30,7 +30,7 @@ export default function PokeList({
   refreshing = false,
   emptyMessage = "No Pokémon found",
 }: PokeListProps) {
-  console.log("🔄 PokeList rendering with", pokemonList.length, "pokemon");
+  console.log("PokeList rendering with", pokemonList.length, "pokemon");
 
   if (isLoading) {
     return (

@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: 20,
     paddingBottom: 40,
-    flex: 1,
+    flexGrow: 1,
   },
   centerContainer: {
     justifyContent: "center",

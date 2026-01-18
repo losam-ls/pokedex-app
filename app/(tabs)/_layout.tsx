@@ -6,6 +6,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "pink",
+        tabBarInactiveTintColor: "gray",
         headerShown: false,
       }}
     >
@@ -13,7 +14,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={24} color="grey" />
+            <Ionicons name="home" size={24} color={color} />
           ),
         }}
       />
@@ -23,7 +24,7 @@ export default function TabsLayout() {
         options={{
           headerTitle: "Favourites",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart" size={24} color="grey" />
+            <Ionicons name="heart" size={24} color={color} />
           ),
         }}
       />

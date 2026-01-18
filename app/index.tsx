@@ -1,28 +1,44 @@
-import { FontAwesome } from "@expo/vector-icons"; // Using icon instead
+import { FontAwesome } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, Text } from "react-native";
 
 export default function EntryScreen() {
   const router = useRouter();
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const handleGetStarted = () => {
-    router.replace("/(tabs)");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleAutoNavigate();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleAutoNavigate = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => {
+      router.replace("/(tabs)");
+    });
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: fadeAnim,
+        },
+      ]}
+    >
       <FontAwesome name="bolt" size={120} color="white" style={styles.icon} />
       <Text style={styles.title}>Pokédex</Text>
       <Text style={styles.subtitle}>Gotta catch 'em all!</Text>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleGetStarted}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.buttonText}>Enter Pokédex</Text>
-      </TouchableOpacity>
-    </View>
+      <Text style={styles.countdownText}>Loading your Pokédex...</Text>
+    </Animated.View>
   );
 }
 
@@ -31,7 +47,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FF0000",
+    backgroundColor: "pink",
     padding: 20,
   },
   icon: {
@@ -46,18 +62,12 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     color: "rgba(255, 255, 255, 0.9)",
-    marginBottom: 50,
+    marginBottom: 30,
     fontStyle: "italic",
   },
-  button: {
-    backgroundColor: "white",
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 30,
-  },
-  buttonText: {
-    color: "#FF0000",
-    fontSize: 20,
-    fontWeight: "bold",
+  countdownText: {
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.7)",
+    marginTop: 20,
   },
 });
