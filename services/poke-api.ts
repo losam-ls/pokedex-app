@@ -1,11 +1,11 @@
 const BASE_URL = "https://pokeapi.co/api/v2";
 
 import type {
-  Pokemon,
-  PokemonSpecies,
   EvolutionChain,
-  NamedAPIResource,
+  PaginatedPokemonResponse,
+  Pokemon,
   PokemonListResponse,
+  PokemonSpecies,
 } from "../constants/pokemon";
 
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -94,6 +94,31 @@ export const PokeApiService = {
     const data = await fetchAPI<EvolutionChain>(url);
     setCachedData(cacheKey, data);
     return data;
+  },
+  getPaginatedPokemon: async (
+    page: number,
+    limit: number = 50,
+  ): Promise<PaginatedPokemonResponse> => {
+    const offset = (page - 1) * limit;
+    const cacheKey = `pokemon-page-${page}-${limit}`;
+    const cached = getCachedData<PokemonListResponse>(cacheKey);
+
+    let data: PokemonListResponse;
+    if (cached) {
+      data = cached;
+    } else {
+      const url = `${BASE_URL}/pokemon?offset=${offset}&limit=${limit}`;
+      data = await fetchAPI<PokemonListResponse>(url);
+      setCachedData(cacheKey, data);
+    }
+
+    const response: PaginatedPokemonResponse = {
+      ...data,
+      page,
+      hasNextPage: data.next !== null,
+    };
+
+    return response;
   },
 
   clearCache: () => cache.clear(),

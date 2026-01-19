@@ -1,15 +1,124 @@
 import React from "react";
 import {
-  FlatList,
-  StyleSheet,
-  View,
-  Text,
   ActivityIndicator,
+  FlatList,
   RefreshControl,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import PokeCard from "./poke-card";
 
+
 interface PokeListProps {
+  pokemonList: Array<{
+    id: number;
+    name: string;
+    sprites?: { front_default: string | null };
+  }>;
+  isLoading?: boolean;
+  error?: Error | null;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  emptyMessage?: string;
+  // Add infinite scroll props
+  onLoadMore?: () => void;
+  isFetchingMore?: boolean;
+  hasMore?: boolean;
+}
+
+export default function PokeList({
+  pokemonList,
+  isLoading = false,
+  error = null,
+  onRefresh,
+  refreshing = false,
+  emptyMessage = "No Pokémon found",
+  onLoadMore,
+  isFetchingMore = false,
+  hasMore = false,
+}: PokeListProps) {
+  console.log("PokeList rendering with", pokemonList.length, "pokemon");
+
+  if (isLoading && pokemonList.length === 0) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="red" />
+        <Text>Loading Pokémon...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>Error loading Pokémon</Text>
+        <Text>{error.message}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={pokemonList}
+      keyExtractor={(item) => item.id.toString()}
+      numColumns={2}
+      contentContainerStyle={styles.list}
+      renderItem={({ item }) => <PokeCard pokemon={item} />}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["red"]}
+          />
+        ) : undefined
+      }
+      onEndReached={onLoadMore}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={
+        isFetchingMore ? (
+          <View style={styles.footer}>
+            <ActivityIndicator size="small" color="red" />
+            <Text style={styles.footerText}>Loading more...</Text>
+          </View>
+        ) : null
+      }
+      ListEmptyComponent={
+        <View style={styles.center}>
+          <Text>{emptyMessage}</Text>
+        </View>
+      }
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  list: {
+    padding: 8,
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+  },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  footer: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  footerText: {
+    marginTop: 8,
+    color: "gray",
+  },
+});
+
+/*interface PokeListProps {
   pokemonList: Array<{
     id: number;
     name: string;
@@ -93,3 +202,5 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 });
+
+*/

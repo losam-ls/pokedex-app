@@ -1,5 +1,6 @@
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, useInfiniteQuery } from "@tanstack/react-query";
 import { PokeApiService } from "../services/poke-api";
+import { PaginatedPokemonResponse } from "@/constants/pokemon";
 
 export const usePokemonList = (limit: number = 20, offset: number = 0) => {
   return useQuery({
@@ -60,5 +61,21 @@ export const usePokemonByIds = (ids: number[]) => {
       isLoading: results.some((result) => result.isLoading),
       isError: results.some((result) => result.isError),
     }),
+  });
+};
+
+
+export const usePokemonInfiniteList = (limit: number = 50) => {
+  return useInfiniteQuery({
+    queryKey: ["pokemon", "infinite-list", limit],
+    queryFn: async (context): Promise<PaginatedPokemonResponse> => {
+      const page = context.pageParam as number;
+      return await PokeApiService.getPaginatedPokemon(page, limit);
+    },
+    getNextPageParam: (lastPage: PaginatedPokemonResponse) => {
+      return lastPage.hasNextPage ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 1000 * 60 * 5,
   });
 };

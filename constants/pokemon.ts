@@ -3,6 +3,18 @@ export interface NamedAPIResource {
   url: string;
 }
 
+export interface PokemonListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: NamedAPIResource[];
+}
+
+export interface PaginatedPokemonResponse extends PokemonListResponse {
+  page: number;
+  hasNextPage: boolean;
+}
+
 export interface PokemonAbility {
   ability: NamedAPIResource;
   is_hidden: boolean;
